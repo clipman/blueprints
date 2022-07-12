@@ -1,0 +1,53 @@
+blueprint:
+  name: 스위치 동기화
+  description: 스위치A와 스위치B의 상태를 동기화합니다.
+  domain: automation
+  input:
+    switch_A:
+      name: 스위치A 선택
+      selector:
+        entity:
+          domain: switch
+    switch_B:
+      name: 스위치B 선택
+      selector:
+        entity:
+          domain: switch
+mode: parallel
+max: 10
+max_exceeded: silent
+variables:
+  switch_A: !input switch_A
+  switch_B: !input switch_B
+trigger:
+  - platform: state
+    entity_id: !input switch_A
+  - platform: state
+    entity_id: !input switch_B
+condition:
+  - condition: template
+    value_template: >-
+      {{ states(switch_A) != states(switch_B) }}
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state.state != 'unavailable' }}
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: '{{ trigger.entity_id == switch_A }}'
+          - condition: template
+            value_template: '{{ states(switch_B) != trigger.to_state.state }}'
+        sequence:
+          - service: 'switch.turn_{{ trigger.to_state.state }}'
+            target:
+              entity_id: !input switch_B
+      - conditions:
+          - condition: template
+            value_template: '{{ trigger.entity_id == switch_B }}'
+          - condition: template
+            value_template: '{{ states(switch_A) != trigger.to_state.state }}'
+        sequence:
+          - service: 'switch.turn_{{ trigger.to_state.state }}'
+            target:
+              entity_id: !input switch_A
