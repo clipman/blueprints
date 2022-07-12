@@ -1,0 +1,54 @@
+blueprint:
+  name: 미디어플레이어 동기화
+  description: 미디어플레이어와 스위치를 동기화 합니다.
+  domain: automation
+  input:
+    switch:
+      name: 스위치 선택
+      selector:
+        entity:
+          domain: switch
+    media_player:
+      name: 미디어플레이어 선택
+      selector:
+        entity:
+          domain: media_player
+mode: parallel
+max: 10
+max_exceeded: silent
+variables:
+  media_player: !input media_player
+  switch: !input switch
+trigger:
+  - platform: state
+    entity_id: !input media_player
+  - platform: state
+    entity_id: !input switch
+condition:
+  - condition: template
+    value_template: >-
+      {{ (states(media_player) | replace("playing", "on") | replace("paused", "on")) != states(switch) }}
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state.state != 'unavailable' }}
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: '{{ trigger.entity_id == media_player }}'
+          - condition: template
+            value_template: '{{ states(switch) != ("on" if trigger.to_state.state != "off" else "off") }}'
+        sequence:
+          - service: >-
+              switch.turn_{{ "on" if trigger.to_state.state != "off" else "off" }}
+            target:
+              entity_id: !input switch
+      - conditions:
+          - condition: template
+            value_template: '{{ trigger.entity_id == switch }}'
+          - condition: template
+            value_template: '{{ states(media_player) != trigger.to_state.state }}'
+        sequence:
+          - service: 'media_player.turn_{{ trigger.to_state.state }}'
+            target:
+              entity_id: !input media_player
