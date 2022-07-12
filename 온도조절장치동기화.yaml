@@ -1,0 +1,54 @@
+blueprint:
+  name: 온도조절장치 동기화
+  description: 온도조절장치와 스위치를 동기화 합니다.
+  domain: automation
+  input:
+    switch:
+      name: 스위치 선택
+      selector:
+        entity:
+          domain: switch
+    climate:
+      name: 온도조절장치 선택
+      selector:
+        entity:
+          domain: climate
+mode: parallel
+max: 10
+max_exceeded: silent
+variables:
+  climate: !input climate
+  switch: !input switch
+trigger:
+  - platform: state
+    entity_id: !input climate
+  - platform: state
+    entity_id: !input switch
+condition:
+  - condition: template
+    value_template: >-
+      {{ (states(climate) | replace("heat_cool", "on") | replace("heat", "on") | replace("cool", "on") | replace("dry", "on") | replace("fan_only", "on") | replace("idle", "on")) != states(switch) }}
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state.state != 'unavailable' }}
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: '{{ trigger.entity_id == climate }}'
+          - condition: template
+            value_template: '{{ states(switch) != ("on" if trigger.to_state.state != "off" else "off") }}'
+        sequence:
+          - service: >-
+              switch.turn_{{ "on" if trigger.to_state.state != "off" else "off" }}
+            target:
+              entity_id: !input switch
+      - conditions:
+          - condition: template
+            value_template: '{{ trigger.entity_id == switch }}'
+          - condition: template
+            value_template: '{{ states(climate) != trigger.to_state.state }}'
+        sequence:
+          - service: 'climate.turn_{{ trigger.to_state.state }}'
+            target:
+              entity_id: !input climate
