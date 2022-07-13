@@ -3,6 +3,8 @@
 blueprint:
   name: 에어컨 제어(날자)
   description: 외부 온도/습도 센서로 계산된 불쾌지수를 기준으로 에어컨을 제어합니다.
+    습도가 높으면 냉방모드와 제습모드를 번갈아서 동작하도록 합니다.
+    출입문과 창문의 열림을 에어컨 제어에 활용합니다.
   domain: automation
   input:
     input_boolean_aircon:
@@ -42,7 +44,7 @@ blueprint:
           domain: binary_sensor
     input_number_target_discomfort_Index:
       name: 목표 불쾌지수
-      description: input_number (20~30, 0.1), 목표 불쾌지수를 읽어오며 외부에서 변경이 가능합니다.
+      description: input_number (20~30, 0.1), 목표 불쾌지수를 설정하며 외부에서 변경이 가능합니다.
       selector:
         entity:
           domain: input_number
@@ -57,13 +59,14 @@ blueprint:
           step: 0.1
     target_aircon_cool_mode:
       name: 에어컨 냉방모드
-      description: 에어컨 냉방모드로 가동시 동작할 에어컨 모드를 냉방(cool), 제습(dry) 중에서 선택합니다.
+      description: 에어컨 냉방모드로 가동시 동작할 에어컨 모드를 선택합니다.
       default: cool
       selector:
         select:
           options:
             - "cool"
-            - "dry"
+            #- "dry"
+            #- "fan_only"
     target_aircon_fanonly_mode:
       name: 에어컨 송풍모드
       description: 에어컨 송풍모드로 가동시 동작할 에어컨 모드를 선택합니다.
@@ -71,19 +74,21 @@ blueprint:
       selector:
         select:
           options:
+            #- "cool"
+            #- "dry"
             - "fan_only"
-            - "cool"
-            - "dry"
     target_aircon_fan_mode:
       name: 에어컨 팬모드
-      description: 에어컨마다 지원하는 값이 다르므로 에어컨의 fan_modes 속성을 참고하여 입력합니다. (auto, low, medium, high, turbo, middle, ...)
+      description: 에어컨마다 지원하는 값이 다르므로 에어컨의 fan_modes 속성을 참고하여 입력합니다.
+        (auto, low, medium, high, turbo, middle, ...)
       default: auto
       selector:
         text:
     target_aircon_temperature:
-      name: 에어컨 냉방설정온도
+      name: 에어컨 냉방설정 온도
       description: 에어컨 동작시 에어컨에 설정하는 온도입니다.
-      default: 22
+        에어컨 팬모드가 자동일 경우에도 이 값이 영향을 미치므로 적당한 값을 입력합니다.
+      default: 23
       selector:
         number:
           min: 20
@@ -92,7 +97,8 @@ blueprint:
           unit_of_measurement: "°C"
     target_aircon_humidity:
       name: 제습모드를 병행할 습도
-      description: 에어컨 냉방모드에서 송풍모드로 변경시 여기에 설정한 습도보다 높으면 정해진 시간동안 제습모드가 동작합니다.
+      description: 여기에 설정한 습도보다 높으면 에어컨 동작시 냉방(cool)과 제습(dry)을 번갈아서 동작합니다.
+        일반모드 = 냉방->송풍->냉방->송풍, 병행모드 = 냉방->송풍->제습->송풍->냉방->송풍->제습->송풍
       default: 65
       selector:
         number:
@@ -100,15 +106,13 @@ blueprint:
           max: 100
           step: 1
           unit_of_measurement: "%"
-    dry_time:
-      name: 제습모드로 동작할 시간
-      description: 에어컨 냉방모드에서 송풍모드로 변경시 습도가 높으면 여기에 설정한 시간동안 제습모드가 동작합니다.
-      default:
-        hours: 0
-        minutes: 5
-        seconds: 0
+    input_boolean_toggle_cool_dry:
+      name: 제습병행모드를 제어할 가상 스위치
+      description: input_boolean, 제습병행모드를 제어하는데 필요한 가상 스위치입니다.
+        이 값은 자동화 내부에서 사용되고 자동으로 바뀌며 사용자가 설정하지 않습니다.
       selector:
-        duration:
+        entity:
+          domain: input_boolean
     idle_time:
       name: 문이 잠깐 열리는 시간
       description: 설정한 시간보다 오랫동안 문이 열려있으면 에어컨을 송풍으로 변경합니다.
@@ -120,7 +124,7 @@ blueprint:
         duration:
     off_time:
       name: 문이 오래 열리는 시간
-      description: 설정한 시간보다 오랫동안 문이 열려있으면 에어컨을 끕니다.
+      description: 설정한 시간보다 오랫동안 문이 열려있으면 에어컨을 끄고 자동화를 종료합니다.
       default:
         hours: 0
         minutes: 2
@@ -131,13 +135,14 @@ variables:
   climate_aircon: !input climate_aircon
   sensor_temperature: !input sensor_temperature
   sensor_humidity: !input sensor_humidity
-  target_discomfort_Index: !input input_number_target_discomfort_Index
+  input_number_target_discomfort_Index: !input input_number_target_discomfort_Index
   index_offset: !input index_offset
   target_aircon_cool_mode: !input target_aircon_cool_mode
   target_aircon_fanonly_mode: !input target_aircon_fanonly_mode
   target_aircon_fan_mode: !input target_aircon_fan_mode
   target_aircon_temperature: !input target_aircon_temperature
   target_aircon_humidity: !input target_aircon_humidity
+  input_boolean_toggle_cool_dry: !input input_boolean_toggle_cool_dry
 trigger:
   - platform: state
     id: 온도습도목표변경
@@ -195,21 +200,23 @@ action:
         sequence:
           - if:
               - condition: template
-                value_template: '{{ (states(sensor_temperature)|float(default=0)-0.55*(1-states(sensor_humidity)|float(default=0)/100)*(states(sensor_temperature)|float(default=0)-14.5))|round(1) > (states(target_discomfort_Index)|float + index_offset|float) }}'
+                value_template: '{{ (states(sensor_temperature)|float(default=0)-0.55*(1-states(sensor_humidity)|float(default=0)/100)*(states(sensor_temperature)|float(default=0)-14.5))|round(1) > (states(input_number_target_discomfort_Index)|float(default=0) + index_offset|float(default=0)) }}'
               - condition: not
                 conditions:
                   - condition: template
-                    value_template: '{{ is_state(climate_aircon, target_aircon_cool_mode) }}'
+                    #value_template: '{{ is_state(climate_aircon, target_aircon_cool_mode) }}'
+                    value_template: '{{ is_state(climate_aircon, iif((states(sensor_humidity)|float(default=0) > target_aircon_humidity|float(default=0)) and states(input_boolean_toggle_cool_dry)|bool, "dry", target_aircon_cool_mode)) }}'
             then:
               - service: climate.set_hvac_mode
                 data:
-                  hvac_mode: '{{ target_aircon_cool_mode }}'
+                  #hvac_mode: '{{ target_aircon_cool_mode }}'
+                  hvac_mode: '{{ iif((states(sensor_humidity)|float(default=0) > target_aircon_humidity|float(default=0)) and states(input_boolean_toggle_cool_dry)|bool, "dry", target_aircon_cool_mode) }}'
                 target:
                   entity_id: !input climate_aircon
             else:
               - if:
                   - condition: template
-                    value_template: '{{ (states(sensor_temperature)|float(default=0)-0.55*(1-states(sensor_humidity)|float(default=0)/100)*(states(sensor_temperature)|float(default=0)-14.5))|round(1) < (states(target_discomfort_Index)|float - index_offset|float) }}'
+                    value_template: '{{ (states(sensor_temperature)|float(default=0)-0.55*(1-states(sensor_humidity)|float(default=0)/100)*(states(sensor_temperature)|float(default=0)-14.5))|round(1) < (states(input_number_target_discomfort_Index)|float(default=0) - index_offset|float(default=0)) }}'
                   - condition: not
                     conditions:
                       - condition: template
@@ -220,6 +227,13 @@ action:
                       hvac_mode: '{{ target_aircon_fanonly_mode }}'
                     target:
                       entity_id: !input climate_aircon
+                  - if:
+                      - condition: template
+                        value_template: '{{ states(sensor_humidity)|float(default=0) > target_aircon_humidity|float(default=0) }}'
+                    then:
+                      - service: input_boolean.toggle
+                        target:
+                          entity_id: !input input_boolean_toggle_cool_dry
       - conditions:
           - condition: trigger
             id: 스위치ON
@@ -227,6 +241,14 @@ action:
             entity_id: !input climate_aircon
             state: 'off'
         sequence:
+          - service: climate.turn_on
+            target:
+              entity_id: !input climate_aircon
+          - delay:
+              hours: 0
+              minutes: 0
+              seconds: 1
+              milliseconds: 0
           - service: climate.set_hvac_mode
             data:
               hvac_mode: '{{ target_aircon_cool_mode }}'
@@ -252,6 +274,13 @@ action:
               fan_mode: '{{ target_aircon_fan_mode }}'
             target:
               entity_id: !input climate_aircon
+          - if:
+              - condition: template
+                value_template: '{{ states(sensor_humidity)|float(default=0) > target_aircon_humidity|float(default=0) }}'
+            then:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: !input input_boolean_toggle_cool_dry
       - conditions:
           - condition: trigger
             id: 스위치OFF
