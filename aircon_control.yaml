@@ -1,6 +1,6 @@
 #에어컨 제어(날자, clipman@naver.com)
 #veraion: 2022-07-16 제습모드후 송풍모드시 팬속도 변경
-#version: 2022-07-14 최초공개
+#version: 2022-07-13 최초공개
 blueprint:
   name: 에어컨 제어(날자)
   description: 외부 온도/습도 센서로 계산된 불쾌지수를 기준으로 에어컨을 제어합니다.
