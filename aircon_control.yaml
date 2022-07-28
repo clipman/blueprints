@@ -367,9 +367,11 @@ action:
       - conditions:
           - condition: trigger
             id: 창문열림
-          - condition: state
-            entity_id: !input climate_aircon
-            state: 'on'
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: !input climate_aircon
+                state: 'off'
         sequence:
           - service: climate.turn_off
             target:
