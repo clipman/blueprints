@@ -1,4 +1,5 @@
 #에어컨 제어(날자, clipman@naver.com)
+#veraion: 2022-07-28 창문열림 버그수정
 #veraion: 2022-07-16 제습모드후 송풍모드시 팬속도 변경
 #version: 2022-07-13 최초공개
 blueprint:
