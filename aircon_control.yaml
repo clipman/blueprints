@@ -1,4 +1,5 @@
 #에어컨 제어(날자, clipman@naver.com)
+#version: 2023-07-01 문이 열린 후 온/습도변경시 버그수정
 #veraion: 2022-07-28 문열림시 버그수정
 #veraion: 2022-07-16 제습모드후 송풍모드시 팬속도 변경
 #version: 2022-07-13 최초공개
@@ -199,6 +200,9 @@ action:
             state: 'on'
           - condition: template
             value_template: '{{ trigger.from_state.state != trigger.to_state.state }}'
+          - condition: state
+            entity_id: !input sensor_door
+            state: 'off'
         sequence:
           - if:
               - condition: template
